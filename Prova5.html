@@ -1,0 +1,838 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gestione Magazzino Elettrico e Fibra Ottica</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body class="bg-gray-100 font-sans p-6">
+
+    <div id="box-sincronizzazione" class="max-w-7xl mx-auto bg-amber-50 border border-amber-300 p-4 rounded-md mb-6 text-sm text-amber-900 shadow-sm">
+        <h3 class="font-bold mb-1 flex items-center gap-2">🔄 Configura Sincronizzazione Cloud (PC, Tablet, Telefono)</h3>
+        <p class="mb-3 text-xs text-amber-800">Incolla qui i dati del tuo progetto Supabase per collegare tutti i tuoi dispositivi in tempo reale.</p>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-3 items-end">
+            <div>
+                <label class="block text-xs font-semibold mb-1 text-amber-900">Project URL</label>
+                <input type="text" id="supabase-url" class="w-full p-2 border rounded bg-white text-gray-800 text-xs border-amber-300" placeholder="https://xyzabc...supabase.co">
+            </div>
+            <div>
+                <label class="block text-xs font-semibold mb-1 text-amber-900">Anon Key (Chiave Pubblica)</label>
+                <input type="text" id="supabase-key" class="w-full p-2 border rounded bg-white text-gray-800 text-xs border-amber-300" placeholder="eyJhbGciOiJIUzI1Ni...">
+            </div>
+            <button onclick="attivaSincronizzazione()" class="bg-amber-600 hover:bg-amber-700 text-white font-bold py-2 px-4 rounded text-xs transition cursor-pointer">Attiva Sincronizzazione</button>
+        </div>
+    </div>
+
+    <div id="container-notifiche" class="fixed top-4 right-4 z-50 flex flex-col gap-2 max-w-sm w-full"></div>
+
+    <div id="sezione-login" class="max-w-md mx-auto mt-10 bg-white p-8 rounded-lg shadow-md">
+        
+        <div id="box-login">
+            <h2 class="text-2xl font-bold text-center text-gray-800 mb-6">🔑 Accesso Magazzino</h2>
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-600 mb-1">Email</label>
+                    <input type="email" id="login-email" class="w-full p-2 border rounded-md bg-gray-50 text-gray-800" placeholder="esempio@email.com">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-600 mb-1">Password</label>
+                    <input type="password" id="login-password" class="w-full p-2 border rounded-md bg-gray-50 text-gray-800" placeholder="••••••••">
+                </div>
+                <div id="errore-login" class="text-red-500 text-sm hidden">❌ Email o Password errati!</div>
+                <button onclick="eseguiLogin()" class="w-full bg-blue-600 text-white p-2 rounded-md hover:bg-blue-700 font-medium transition cursor-pointer">Accedi</button>
+                
+                <p class="text-sm text-center text-gray-500 mt-4">
+                    Non hai un account? <a href="#" onclick="mostraFormRegistrazione('REGISTRAZIONE')" class="text-blue-600 hover:underline font-medium">Crea un account</a>
+                </p>
+            </div>
+        </div>
+
+        <div id="box-registrazione" class="hidden">
+            <h2 class="text-2xl font-bold text-center text-gray-800 mb-6">📝 Crea Nuovo Account</h2>
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-600 mb-1">Nome Azienda ditta</label>
+                    <input type="text" id="reg-azienda" placeholder="Es. Ditta Rossi Elettronica" class="w-full p-2 border border-blue-300 rounded-md bg-blue-50 text-gray-800 mb-3 font-medium">
+                    
+                    <label class="block text-sm font-medium text-gray-600 mb-1">Il tuo Nome (o Username)</label>
+                    <input type="text" id="reg-nome" class="w-full p-2 border rounded-md bg-gray-50 text-gray-800" placeholder="Es. Benito">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-600 mb-1">Email (Richiede Verifica Link)</label>
+                    <input type="email" id="reg-email" class="w-full p-2 border rounded-md bg-gray-50 text-gray-800" placeholder="esempio@email.com">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-600 mb-1">Numero di Telefono (Con prefisso es. +393331234567)</label>
+                    <input type="tel" id="reg-telefono" class="w-full p-2 border rounded-md bg-gray-50 text-gray-800" placeholder="+393331234567">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-600 mb-1">Password</label>
+                    <input type="password" id="reg-password" class="w-full p-2 border rounded-md bg-gray-50 text-gray-800" placeholder="Scegli una password">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-600 mb-1">Tipo di Utente (Ruolo)</label>
+                    <select id="reg-ruolo" class="w-full p-2 border rounded-md bg-gray-50 text-gray-800" onchange="gestisciCambioRuoloReg()">
+                        <option value="collega">👷 Collega (Solo prelievo materiale)</option>
+                        <option value="admin">👑 Amministratore (Accesso Totale)</option>
+                    </select>
+                </div>
+                <div id="wrapper-codice-admin" class="hidden">
+                    <label class="block text-sm font-medium text-gray-600 mb-1 text-amber-700 font-bold">Codice di Sicurezza Admin attuale per la registrazione</label>
+                    <input type="password" id="reg-codice-admin" class="w-full p-2 border border-amber-400 rounded-md bg-amber-50 text-gray-800" placeholder="Inserisci codice sblocco admin">
+                </div>
+                <button onclick="eseguiRegistrazione()" class="w-full bg-green-600 text-white p-2 rounded-md hover:bg-green-700 font-medium transition cursor-pointer">Registrati e Invia Verifica</button>
+                
+                <p class="text-sm text-center text-gray-500 mt-4">
+                    Hai già un account? <a href="#" onclick="mostraFormRegistrazione('LOGIN')" class="text-blue-600 hover:underline font-medium">Accedi qui</a>
+                </p>
+            </div>
+        </div>
+
+        <div id="box-attesa-email" class="hidden text-center space-y-4">
+            <div class="text-5xl">📩</div>
+            <h2 class="text-xl font-bold text-gray-800">Verifica la tua Email</h2>
+            <p class="text-sm text-gray-600">Abbiamo inviato un link di conferma all'indirizzo inserito. Controlla la tua casella postale (e la cartella Spam) e clicca sul link per attivare l'account.</p>
+            <button onclick="mostraFormRegistrazione('LOGIN')" class="w-full bg-blue-600 text-white p-2 rounded-md hover:bg-blue-700 font-medium transition">Ho confermato, vai al Login</button>
+        </div>
+
+        <div id="box-verifica-sms" class="hidden text-center space-y-4">
+            <div class="text-5xl">📱</div>
+            <h2 class="text-xl font-bold text-gray-800">Verifica Numero di Telefono</h2>
+            <p class="text-xs text-gray-500">Un SMS con un codice di sicurezza a 6 cifre è stato inviato al tuo numero.</p>
+            <div>
+                <input type="text" id="input-otp-sms" maxlength="6" class="w-full p-3 border rounded-md bg-gray-50 text-gray-800 text-center font-bold tracking-widest text-lg" placeholder="123456">
+            </div>
+            <button onclick="verificaCodiceSMS()" class="w-full bg-purple-600 text-white p-2 rounded-md hover:bg-purple-700 font-medium transition">Verifica Codice e Accedi</button>
+        </div>
+
+    </div>
+
+    <div id="app-magazzino" class="max-w-7xl mx-auto hidden">
+        
+        <div id="box-credenziali-api" class="bg-indigo-50 border border-indigo-200 p-4 rounded-lg mb-6 text-xs text-indigo-900 shadow-sm hidden">
+            <h4 class="font-bold mb-2 flex items-center gap-1">🔑 Credenziali API e Sicurezza della tua Ditta (Inviate via Email)</h4>
+            <p class="mb-2">Usa questi parametri per integrare software esterni o terminali hardware dedicati alla tua ditta:</p>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-2">
+                <div><b>API URL ditta:</b> <code id="api-url-display" class="bg-white px-1 py-0.5 rounded border"></code></div>
+                <div><b>Ditta API KEY (Token):</b> <code id="api-key-display" class="bg-white px-1 py-0.5 rounded border"></code></div>
+                <div><b>Codice Sicurezza Generato:</b> <code id="api-code-display" class="bg-white px-1 py-0.5 rounded border"></code></div>
+            </div>
+        </div>
+
+        <header class="mb-6 flex flex-col md:flex-row justify-between items-center bg-white p-4 rounded-lg shadow-sm gap-4">
+            <div>
+                <h1 class="text-2xl font-bold text-gray-800">📦 Inventario Magazzino Elettrico & Fibra Ottica</h1>
+                <p class="text-sm text-gray-500 mt-1">
+                    Utente: <span id="nome-utente" class="font-bold text-gray-700"></span> — 
+                    Ruolo: <span id="ruolo-utente" class="font-bold uppercase text-blue-600 text-xs bg-blue-50 px-2 py-0.5 rounded border border-blue-200"></span>
+                    <span id="nome-azienda" class="text-xs text-white bg-indigo-600 px-2 py-0.5 rounded-full font-bold ml-2 shadow-sm"></span>
+                </p>
+            </div>
+            <div class="flex flex-wrap items-center gap-3">
+                <button id="btn-esporta-excel" onclick="esportaInExcel()" class="bg-green-600 text-white px-4 py-2 rounded-md shadow hover:bg-green-700 cursor-pointer font-medium text-sm hidden transition flex items-center gap-2">📊 Esporta in Excel</button>
+                <button id="btn-reset-admin" onclick="forzaResetTotale()" class="bg-amber-100 hover:bg-amber-200 text-amber-800 px-3 py-2 rounded-md transition border border-amber-300 hidden text-sm font-medium cursor-pointer">⚠️ Resetta App</button>
+                <button onclick="eseguiLogout()" class="bg-gray-200 text-gray-700 px-4 py-2 rounded-md hover:bg-gray-300 transition font-medium text-sm cursor-pointer">🚪 Disconnetti</button>
+            </div>
+        </header>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+            <div class="bg-white p-5 rounded-lg shadow-md border-t-4 border-blue-500">
+                <h2 class="text-lg font-bold mb-3 text-blue-700 flex items-center gap-2">⚡ Cavi Unipolari (Pz)</h2>
+                <div id="container-cavi" class="space-y-3"></div>
+            </div>
+
+            <div class="bg-white p-5 rounded-lg shadow-md border-t-4 border-green-500">
+                <h2 class="text-lg font-bold mb-3 text-green-700 flex items-center gap-2">🌀 Bobine e Matasse</h2>
+                <div class="space-y-4">
+                    <div>
+                        <h3 class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Bobine Elettriche</h3>
+                        <div id="container-bobine" class="space-y-2"></div>
+                    </div>
+                    <div>
+                        <h3 class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Fibra Ottica (Dorsali)</h3>
+                        <div id="container-fibra" class="space-y-2"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-white p-5 rounded-lg shadow-md border-t-4 border-amber-500">
+                <h2 class="text-lg font-bold mb-3 text-amber-700 flex items-center gap-2">🔌 Componenti Impianti (Pz)</h2>
+                <div id="container-componenti" class="space-y-2 max-h-96 overflow-y-auto pr-1"></div>
+            </div>
+
+            <div class="bg-white p-5 rounded-lg shadow-md border-t-4 border-teal-500">
+                <h2 class="text-lg font-bold mb-3 text-teal-700 flex items-center gap-2">🛠️ Strumentazione & Utensili (Pz)</h2>
+                <div id="container-strumenti" class="space-y-2"></div>
+            </div>
+
+            <div class="bg-white p-5 rounded-lg shadow-md border-t-4 border-red-500">
+                <h2 class="text-lg font-bold mb-3 text-red-700 flex items-center gap-2">🦺 Sicurezza & Logistica (Pz)</h2>
+                <div id="container-sicurezza" class="space-y-2"></div>
+            </div>
+
+            <div class="bg-white p-5 rounded-lg shadow-md border-t-4 border-cyan-500">
+                <h2 class="text-lg font-bold mb-3 text-cyan-700 flex items-center gap-2">🧰 FO: Borsa del Tecnico (Pz)</h2>
+                <div id="container-fo-borsa" class="space-y-2"></div>
+            </div>
+
+            <div class="bg-white p-5 rounded-lg shadow-md border-t-4 border-emerald-500">
+                <h2 class="text-lg font-bold mb-3 text-emerald-700 flex items-center gap-2">🧪 FO: Consumabili & Minuteria (Pz)</h2>
+                <div id="container-fo-consumabili" class="space-y-2 max-h-96 overflow-y-auto pr-1"></div>
+            </div>
+
+            <div class="bg-white p-5 rounded-lg shadow-md border-t-4 border-orange-500">
+                <h2 class="text-lg font-bold mb-3 text-orange-700 flex items-center gap-2">🚜 FO: Attrezzature Posa / Cantiere (Pz)</h2>
+                <div id="container-fo-pesanti" class="space-y-2"></div>
+            </div>
+
+            <div class="bg-white p-5 rounded-lg shadow-md border-t-4 border-purple-500">
+                <h2 class="text-lg font-bold mb-3 text-purple-700 flex items-center gap-2">📦 Materiale Personalizzato (Pz)</h2>
+                <div id="container-personalizzato" class="space-y-2 text-gray-500 text-sm italic">
+                    Nessun materiale personalizzato aggiunto.
+                </div>
+            </div>
+        </div>
+
+        <div id="sezione-admin-custom" class="bg-purple-50 border border-purple-200 p-5 rounded-lg shadow-md mb-6 hidden">
+            <h2 class="text-lg font-bold mb-3 text-purple-800 flex items-center gap-2">➕ Aggiungi Nuovo Articolo Personalizzato (Solo Admin)</h2>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+                <div>
+                    <label class="block text-sm font-medium text-purple-700 mb-1">Nome Nuovo Articolo</label>
+                    <input type="text" id="nuovo-articolo-nome" class="w-full p-2 border border-purple-300 rounded-md bg-white text-gray-800" placeholder="Es. Giuntatrice di scorta">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-purple-700 mb-1">Categoria di Destinazione</label>
+                    <select id="nuovo-articolo-cat" class="w-full p-2 border border-purple-300 rounded-md bg-white text-gray-800">
+                        <option value="componenti_impianti">🔌 Componenti Impianti</option>
+                        <option value="strumenti_utensili">🛠️ Strumentazione e Utensili</option>
+                        <option value="sicurezza_logistica">🦺 Sicurezza e Logistica</option>
+                        <option value="fo_borsa_tecnico">🧰 FO: Borsa Tecnico</option>
+                        <option value="fo_consumabili_minuteria">🧪 FO: Consumabili</option>
+                        <option value="fo_attrezzature_pesanti">🚜 FO: Attrezzature Posa</option>
+                        <option value="altro_personalizzato">📦 Materiale Personalizzato</option>
+                    </select>
+                </div>
+                <button onclick="aggiungiArticoloCustom()" class="bg-purple-600 text-white px-4 py-2 rounded-md hover:bg-purple-700 font-medium transition cursor-pointer select-none shadow-sm">Aggiungi all'Inventario</button>
+            </div>
+        </div>
+
+        <div class="bg-white p-5 rounded-lg shadow-md mb-6">
+            <h2 class="text-lg font-bold mb-4 text-gray-700 flex items-center gap-2">🔄 Registra Movimento</h2>
+            <div class="grid grid-cols-1 md:grid-cols-5 gap-4 items-end">
+                <div>
+                    <label class="block text-sm font-medium text-gray-600 mb-1">Categoria</label>
+                    <select id="select-categoria" class="w-full p-2 border rounded-md bg-gray-50 text-gray-800" onchange="gestisciCambioCategoria()">
+                        <option value="cavi">Cavi Unipolari</option>
+                        <option value="bobine">Bobine</option>
+                        <option value="fibra">Fibra Ottica (Dorsali)</option>
+                        <option value="componenti_impianti">Componenti Impianti</option>
+                        <option value="strumenti_utensili">Strumentazione e Utensili</option>
+                        <option value="sicurezza_logistica">Sicurezza e Logistica</option>
+                        <option value="fo_borsa_tecnico">FO: Borsa del Tecnico</option>
+                        <option value="fo_consumabili_minuteria">FO: Consumabili & Minuteria</option>
+                        <option value="fo_attrezzature_pesanti">FO: Attrezzature Posa / Cantiere</option>
+                        <option value="altro_personalizzato">Materiale Personalizzato</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-600 mb-1">Articolo / Voce</label>
+                    <select id="select-articolo" class="w-full p-2 border rounded-md bg-gray-50 text-gray-800"></select>
+                </div>
+                <div id="colore-wrapper">
+                    <label class="block text-sm font-medium text-gray-600 mb-1">Colore</label>
+                    <select id="select-colore" class="w-full p-2 border rounded-md bg-gray-50 text-gray-800">
+                        <option value="blu">Blu</option>
+                        <option value="nero">Nero</option>
+                        <option value="marrone">Marrone</option>
+                        <option value="giallo_verde">Giallo/Verde</option>
+                    </select>
+                </div>
+                <div>
+                    <label id="label-quantita" class="block text-sm font-medium text-gray-600 mb-1">Quantità</label>
+                    <input type="number" id="input-quantita" class="w-full p-2 border rounded-md bg-gray-50 text-gray-800" placeholder="Es. 10">
+                </div>
+                <div id="pezzi-bobina-wrapper" class="hidden">
+                    <label class="block text-sm font-medium text-gray-600 mb-1">Cambio Matasse (N° pezzi)</label>
+                    <input type="number" id="input-pezzi-bobina" class="w-full p-2 border rounded-md bg-gray-50 text-gray-800" placeholder="Es. 1">
+                </div>
+            </div>
+            <div class="mt-4 flex gap-4">
+                <button id="btn-carica-materiale" onclick="eseguiMovimento(true)" class="bg-green-600 text-white px-5 py-2 rounded-md hover:bg-green-700 transition font-medium cursor-pointer select-none shadow-sm">📥 Carica Materiale</button>
+                <button onclick="eseguiMovimento(false)" class="bg-red-600 text-white px-5 py-2 rounded-md hover:bg-red-700 transition font-medium cursor-pointer select-none shadow-sm">📤 Preleva Materiale</button>
+            </div>
+        </div>
+
+        <div id="sezione-terminale-admin" class="bg-gray-900 text-green-400 p-4 rounded-lg shadow-inner font-mono text-sm h-42 overflow-y-auto hidden">
+            <p class="text-gray-500">// Registro attività aziendale in tempo reale</p>
+            <div id="log-terminale"></div>
+        </div>
+    </div>
+
+    <script>
+        const CODICE_SICUREZZA_ADMIN = "1234";
+
+        // ⚠️ INSERISCI QUI I TUOI DATI REALI DI SUPABASE SENZA SPAZI O BARRE FINALI
+        const SUPABASE_URL_FISSO = "https://usgwagqfoobjsmakfquw.supabase.com"; // <-- Metti il tuo Project URL
+        const SUPABASE_KEY_FISSA = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVzZ3dhZ3Fmb29ianNtYWtmcXV3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA1NjkyNDAsImV4cCI6MjA5NjE0NTI0MH0.0yl9jc5cNoUd75YK2sRoeN1_WfSATIKAWLlKBRTbUZk";       // <-- Metti la tua Anon Public Key
+// ... (tutto il resto dei dati iniziali rimane uguale) ...
+
+        const DATI_INIZIALI = {
+            "cavi_unipolari": {
+                "1.5mm²": { blu: 0, nero: 0, marrone: 0, giallo_verde: 0 },
+                "2.5mm²": { blu: 0, nero: 0, marrone: 0, giallo_verde: 0 },
+                "4.0mm²": { blu: 0, nero: 0, marrone: 0, giallo_verde: 0 },
+                "6.0mm²": { blu: 0, nero: 0, marrone: 0, giallo_verde: 0 },
+            },
+            "bobine": { 
+                "3G1.5": { metri_totali: 0, pezzi: 0 },
+                "3G2.5": { metri_totali: 0, pezzi: 0 }, 
+                "3G4":   { metri_totali: 0, pezzi: 0 }
+            },
+            "fibra_ottica": { 
+                "monomodale": { metri_totali: 0, pezzi: 0 }, 
+                "multimodale": { metri_totali: 0, pezzi: 0 } 
+            },
+            "componenti_impianti": {
+                "Cavi Multipolari": 0, "Cavi Dati e Coassiali": 0, "Interruttori Magnetotermici": 0,
+                "Differenziali (Salvavita)": 0, "Centralini Incasso/Parete": 0, "Prese": 0,
+                "Interruttori/Deviatori/Invertitori": 0, "Placche Decorative": 0, "Tubi Corrugati": 0,
+                "Canaline Rigide": 0, "Scatole di Derivazione": 0, "Morsetti e Fascette": 0,
+                "Tasselli": 0, "Lampade LED": 0, "Plafoniere e Faretti": 0, "Sistemi di Emergenza": 0
+            },
+            "strumenti_utensili": {
+                "Multimetri": 0, "Tester Tensione (Cercafase)": 0, "Pinze Amperometriche": 0,
+                "Cacciaviti Isolati 1000V": 0, "Pinze e Tronchesi Isolate": 0, "Forbici da Elettricista": 0,
+                "Pinze Crimpatrici": 0, "Spelafili": 0, "Capicorda": 0, "Sonde Passacavo": 0
+            },
+            "sicurezza_logistica": {
+                "Guanti Isolanti": 0, "Occhiali Protettivi": 0, "Elmetti di Protection": 0,
+                "Scarpe Antinfortunistica": 0, "Transpallet": 0, "Scale Isolate": 0,
+                "Trabattelli": 0, "Cartellonistica di Sicurezza": 0, "Nastro Delimitatore / Adesivi Pericolo": 0
+            },
+            "fo_borsa_tecnico": {
+                "Giuntatrice a Fusione + Taglierina": 0, "OTDR di Linea": 0, "Power Meter Ottico": 0,
+                "Penna Laser VFL": 0, "Stripper per Guaine FO": 0, "Pinze per Coating": 0,
+                "Forbici in Kevlar": 0, "Alcol Isopropilico Puro": 0, "Salviettine Kimwipes": 0,
+                "Stick Pulizia Bussole/Connettori": 0
+            },
+            "fo_consumabili_minuteria": {
+                "Coprigiunti Termorestringenti": 0, "Connettori SC/APC": 0, "Connettori LC/UPC": 0,
+                "Pigtail Ottici": 0, "Bretelle Ottiche (Varie Misure)": 0, "Scatole CSOE": 0,
+                "Armadietti Stradali (PFS)": 0, "PTE (Punto Terminazione Edificio)": 0,
+                "Borchie Ottiche da Interno": 0, "Cavi Monofibra / Multifibra (Matasse)": 0,
+                "Fascette Stringicavo FO": 0, "Guaine Termorestringenti Grandi": 0,
+                "Tubi Corrugati Dedicati": 0, "Nastro Isolante": 0
+            },
+            "fo_attrezzature_pesanti": {
+                "Macchina Soffiacavo": 0, "Verricelli per Infilaggio": 0, "Transenne da Cantiere": 0,
+                "Cartellonistica Stradale/Sicurezza": 0, "Coni Stradali": 0, "Rilevatori Servizi Interrati": 0,
+                "Scala Telescopica": 0, "Caschi Protettivi Specialistici": 0, "Guanti e Occhiali Anti-Schegge Vetro": 0
+            },
+            "altro_personalizzato": {}
+        };
+
+        let supabaseClient = null;
+
+        class InventarioMagazzino {
+            constructor() {
+                let datiSalvati = localStorage.getItem('magazzino_elettrico_v4');
+                if (datiSalvati) {
+                    try { this.magazzino = JSON.parse(datiSalvati); } catch (e) { this.magazzino = DATI_INIZIALI; this.salvaNelDatabaseLocal(); }
+                } else {
+                    this.magazzino = DATI_INIZIALI;
+                    this.salvaNelDatabaseLocal();
+                }
+            }
+
+            salvaNelDatabaseLocal() {
+                localStorage.setItem('magazzino_elettrico_v4', JSON.stringify(this.magazzino));
+            }
+
+            salvaNelDatabase() {
+                this.salvaNelDatabaseLocal();
+                if(supabaseClient) { inviaACloud('inventario', this.magazzino); }
+            }
+
+            aggiornaCavoUnipolare(dimensione, colore, quantita, utente) {
+                const attuale = this.magazzino["cavi_unipolari"][dimensione][colore];
+                if (attuale + quantita < 0) {
+                    scriviLog(`❌ Errore: Quantità insufficiente per cavo unipolare ${dimensione} ${colore}. Disponibili: ${attuale}`, true);
+                    return false;
+                }
+                this.magazzino["cavi_unipolari"][dimensione][colore] += quantita;
+                const nuovoValore = this.magazzino["cavi_unipolari"][dimensione][colore];
+                this.salvaNelDatabase();
+                scriviLog(`✅ [${utente}] ${quantita > 0 ? 'Caricati' : 'Prelevati'} ${Math.abs(quantita)} pz di cavo unipolare ${dimensione} (${colore}).`);
+                if (quantita < 0) controllaSottoScorta(`Cavo Unipolare ${dimensione} (${colore})`, nuovoValore);
+                return true;
+            }
+
+            aggiornaBobinaStruttura(cat, articolo, metri, pezzi, utente) {
+                const attualeMetri = this.magazzino[cat][articolo].metri_totali;
+                const attualePezzi = this.magazzino[cat][articolo].pezzi;
+
+                if (attualeMetri + metri < 0 || attualePezzi + pezzi < 0) {
+                    scriviLog(`❌ Errore: Disponibilità scorte insufficiente per ${articolo}.`, true);
+                    return false;
+                }
+                this.magazzino[cat][articolo].metri_totali += metri;
+                this.magazzino[cat][articolo].pezzi += pezzi;
+                const nuoviPezzi = this.magazzino[cat][articolo].pezzi;
+                this.salvaNelDatabase();
+                scriviLog(`✅ [${utente}] Aggiornamento ${articolo}: ${Math.abs(metri)} metri, ${Math.abs(pezzi)} matasse.`);
+                if (pezzi < 0) controllaSottoScorta(`Bobine/Matasse ${articolo}`, nuoviPezzi);
+                return true;
+            }
+
+            aggiornaArticoloGenerico(cat, articolo, quantita, utente) {
+                const attuale = this.magazzino[cat][articolo] || 0;
+                if (attuale + quantita < 0) {
+                    scriviLog(`❌ Errore: Disponibilità insufficiente per ${articolo}. Disponibili: ${attuale}`, true);
+                    return false;
+                }
+                this.magazzino[cat][articolo] = attuale + quantita;
+                const nuovoValore = this.magazzino[cat][articolo];
+                this.salvaNelDatabase();
+                scriviLog(`✅ [${utente}] ${quantita > 0 ? 'Caricati' : 'Prelevati'} ${Math.abs(quantita)} unità di ${articolo}.`);
+                if (quantita < 0) controllaSottoScorta(articolo, nuovoValore);
+                return true;
+            }
+
+            aggiungiVoceCustom(cat, nomeArticolo) {
+                if (this.magazzino[cat][nomeArticolo] !== undefined) return false;
+                this.magazzino[cat][nomeArticolo] = 0;
+                this.salvaNelDatabase();
+                return true;
+            }
+        }
+
+        const inventario = new InventarioMagazzino();
+
+        async function attivaSincronizzazione() {
+            const url = document.getElementById('supabase-url').value.trim();
+            const key = document.getElementById('supabase-key').value.trim();
+            if(!url || !key) return alert("Inserisci sia l'URL che la Anon Key!");
+            localStorage.setItem('supabase_url', url);
+            localStorage.setItem('supabase_key', key);
+            await inizializzaSupabase(url, key);
+        }
+
+        async function inizializzaSupabase(url, key) {
+            if(!window.supabase) return;
+            supabaseClient = window.supabase.createClient(url, key);
+            const box = document.getElementById('box-sincronizzazione');
+            if(box) {
+                box.className = "max-w-7xl mx-auto bg-green-50 border border-green-300 p-4 rounded-md mb-6 text-sm text-green-900 flex justify-between items-center shadow-sm";
+                box.innerHTML = `<div><span class="font-bold">✅ Sincronizzazione Cloud Attiva!</span><p class="text-xs text-green-700">Magazzino condiviso collegato.</p></div>
+                <button onclick="disattivaSincronizzazione()" class="text-xs bg-red-100 text-red-700 px-3 py-1.5 rounded hover:bg-red-200 cursor-pointer font-medium">Disattiva Cloud</button>`;
+            }
+            await scaricaDatiDaCloud();
+        }
+
+        function disattivaSincronizzazione() {
+            if(confirm("Disattivare il cloud?")) {
+                localStorage.removeItem('supabase_url'); localStorage.removeItem('supabase_key'); location.reload();
+            }
+        }
+
+        async function inviaACloud(chiave, valore) {
+            if(!supabaseClient) return;
+            const azienda = sessionStorage.getItem('utente_azienda') || 'generico';
+            const chiaveAziendale = chiave + '_' + azienda;
+            try { await supabaseClient.from('magazzino_condiviso').upsert({ chiave: chiaveAziendale, valore: valore }); } catch(e) { console.error(e); }
+        }
+
+        async function scaricaDatiDaCloud() {
+            if(!supabaseClient) return;
+            const azienda = sessionStorage.getItem('utente_azienda') || 'generico';
+            try {
+                const { data: invData } = await supabaseClient.from('magazzino_condiviso').select('valore').eq('chiave', 'inventario_' + azienda).single();
+                if(invData && invData.valore) { inventario.magazzino = invData.valore; inventario.salvaNelDatabaseLocal(); }
+                
+                const { data: logData } = await supabaseClient.from('magazzino_condiviso').select('valore').eq('chiave', 'registro_logs_' + azienda).single();
+                if(logData && logData.valore) { renderizzaLogs(logData.valore); }
+
+                renderizzaInterfaccia();
+            } catch(e) { }
+        }
+
+        setInterval(() => { if(supabaseClient) scaricaDatiDaCloud(); }, 10000);
+
+        function renderizzaLogs(listaLogs) {
+            const terminale = document.getElementById('log-terminale');
+            if(!terminale) return;
+            terminale.innerHTML = "";
+            listaLogs.forEach(l => {
+                const p = document.createElement('p');
+                p.className = l.errore ? "text-red-400 font-bold" : "text-green-400";
+                p.innerHTML = `<span class="text-gray-500">[${l.time}]</span> ${l.msg}`;
+                terminale.appendChild(p);
+            });
+        }
+
+        async function scriviLog(messaggio, isErrore = false) {
+            const timestamp = new Date().toLocaleTimeString('it-IT');
+            let logs = [];
+            const azienda = sessionStorage.getItem('utente_azienda') || 'generico';
+            if(supabaseClient) {
+                const { data } = await supabaseClient.from('magazzino_condiviso').select('valore').eq('chiave', 'registro_logs_' + azienda).single();
+                if(data && data.valore) logs = data.valore;
+            }
+            logs.push({ time: timestamp, msg: messaggio, errore: isErrore });
+            if(logs.length > 100) logs.shift();
+            
+            renderizzaLogs(logs);
+            if(supabaseClient) await inviaACloud('registro_logs', logs);
+        }
+
+        function controllaSottoScorta(nomeArticolo, quantitaAttuale) {
+            if (quantitaAttuale <= 10) {
+                scriviLog(`⚠️ ATTENZIONE: ${nomeArticolo} è sotto scorta! Rimanenti: ${quantitaAttuale} unità`, true);
+                if(sessionStorage.getItem('utente_ruolo') === 'admin') mostraNotificaVisiva(nomeArticolo, quantitaAttuale);
+            }
+        }
+
+        function mostraNotificaVisiva(articolo, qta) {
+            const container = document.getElementById('container-notifiche');
+            const idNotifica = 'notifica-' + Date.now();
+            const mailtoUrl = `mailto:fornitore@esempio.com?subject=Ordine%20Materiale&body=Richiesta%20urgente%20per%20${articolo}`;
+            container.insertAdjacentHTML('beforeend', `<div id="${idNotifica}" class="bg-red-50 border-l-4 border-red-600 p-4 rounded shadow-md border flex flex-col gap-2 bg-white">
+                <div class="flex justify-between items-start"><div><h4 class="text-sm font-bold text-red-800">⚠️ Scorta Critica</h4><p class="text-xs text-gray-700 font-medium mt-1"><b>${articolo}</b> residuo: <b>${qta}</b></p></div><button onclick="this.closest('#${idNotifica}').remove()" class="text-gray-400">✕</button></div>
+                <div class="flex gap-2"><a href="${mailtoUrl}" class="text-center w-full bg-red-600 text-white font-semibold text-xs py-1.5 rounded">📞 Ordina</a></div></div>`);
+        }
+
+        function gestisciCambioRuoloReg() {
+            const ruolo = document.getElementById('reg-ruolo').value;
+            const wrapper = document.getElementById('wrapper-codice-admin');
+            if(ruolo === 'admin') wrapper.classList.remove('hidden');
+            else wrapper.classList.add('hidden');
+        }
+
+        // ==========================================
+        // SWITCH SCHERMATE DI AUTENTICAZIONE
+        // ==========================================
+        function mostraFormRegistrazione(stato) {
+            document.getElementById('box-login').classList.add('hidden');
+            document.getElementById('box-registrazione').classList.add('hidden');
+            document.getElementById('box-attesa-email').classList.add('hidden');
+            document.getElementById('box-verifica-sms').classList.add('hidden');
+
+            if(stato === 'LOGIN') document.getElementById('box-login').classList.remove('hidden');
+            else if(stato === 'REGISTRAZIONE') document.getElementById('box-registrazione').classList.remove('hidden');
+            else if(stato === 'ATTESA_EMAIL') document.getElementById('box-attesa-email').classList.remove('hidden');
+            else if(stato === 'VERIFICA_SMS') document.getElementById('box-verifica-sms').classList.remove('hidden');
+        }
+
+        // ==========================================
+        // LOGICA DI CONTROLLO SESSIONE ED SMS
+        // ==========================================
+        function controllaSessione() {
+            if (!supabaseClient) {
+                setTimeout(controllaSessione, 500);
+                return;
+            }
+
+            supabaseClient.auth.onAuthStateChange(async (event, session) => {
+                if (session && session.user) {
+                    const utente = session.user;
+
+                    // CONTROLLO 1: L'utente ha confermato il telefono via SMS?
+                    // (Se l'SMS provider su Supabase è configurato, controlliamo l'attributo nativo phone_confirmed_at)
+                    if (utente.phone && !utente.phone_confirmed_at) {
+                        // Se non è confermato il telefono, attiviamo la sfida SMS e blocchiamo l'entrata alla dashboard
+                        if (event === 'SIGNED_IN') {
+                            await supabaseClient.auth.updateUser({ phone: utente.phone }); // Invia SMS OTP nativo
+                        }
+                        mostraFormRegistrazione('VERIFICA_SMS');
+                        return;
+                    }
+
+                    const nome = utente.user_metadata.display_name || utente.email;
+                    const ruolo = utente.user_metadata.role || 'collega';
+                    const azienda = utente.user_metadata.azienda || 'generico';
+                    const aziendaVera = utente.user_metadata.azienda_nome_vero || azienda;
+
+                    sessionStorage.setItem('utente_sessione', nome);
+                    sessionStorage.setItem('utente_ruolo', ruolo);
+                    sessionStorage.setItem('utente_azienda', azienda);
+
+                    document.getElementById('sezione-login').classList.add('hidden');
+                    document.getElementById('app-magazzino').classList.remove('hidden');
+                    document.getElementById('nome-utente').innerText = nome;
+                    
+                    const labelAz = document.getElementById('nome-azienda');
+                    if(labelAz) labelAz.innerText = "🏢 " + aziendaVera;
+
+                    document.getElementById('ruolo-utente').innerText = ruolo === 'admin' ? '👑 Admin' : '👷 Collega';
+
+                    const visibilitaAdmin = ruolo === 'admin';
+                    ['btn-carica-materiale', 'sezione-admin-custom', 'btn-reset-admin', 'btn-esporta-excel', 'box-credenziali-api'].forEach(id => {
+                        const el = document.getElementById(id);
+                        if(el) visibilitaAdmin ? el.classList.remove('hidden') : el.classList.add('hidden');
+                    });
+
+                    // Mostra i parametri API generati all'Admin
+                    if(visibilitaAdmin) {
+                        document.getElementById('api-url-display').innerText = localStorage.getItem('supabase_url');
+                        document.getElementById('api-key-display').innerText = utente.user_metadata.ditta_api_key || "Generata su DB";
+                        document.getElementById('api-code-display').innerText = utente.user_metadata.codice_admin_generato || "1234";
+                    }
+
+                    const elTerminale = document.getElementById('sezione-terminale-admin');
+                    if (elTerminale) {
+                        elTerminale.classList.remove('hidden');
+                        const titolo = elTerminale.querySelector('p');
+                        if (titolo) titolo.innerText = "// Registro attività aziendale in tempo reale";
+                    }
+
+                    renderizzaInterfaccia();
+                    gestisciCambioCategoria();
+                } else {
+                    sessionStorage.clear();
+                    document.getElementById('sezione-login').classList.remove('hidden');
+                    document.getElementById('app-magazzino').classList.add('hidden');
+                }
+            });
+        }
+
+        async function eseguiRegistrazione() {
+            if (!supabaseClient) return alert("Attiva prima la sincronizzazione cloud!");
+
+            const nome = document.getElementById('reg-nome').value.trim();
+            const email = document.getElementById('reg-email').value.trim().toLowerCase();
+            const telefono = document.getElementById('reg-telefono').value.trim();
+            const password = document.getElementById('reg-password').value;
+            const ruolo = document.getElementById('reg-ruolo').value;
+            const codiceAdmin = document.getElementById('reg-codice-admin').value;
+            
+            const regAziendaEl = document.getElementById('reg-azienda');
+            if(!regAziendaEl) return alert("❌ Errore HTML: Manca il campo Nome Azienda!");
+            let aziendaRaw = regAziendaEl.value.trim();
+            if (!aziendaRaw) return alert("❌ Inserisci il nome dell'azienda!");
+            
+            const aziendaCodice = aziendaRaw.toLowerCase().replace(/[^a-z0-9]/g, '');
+
+            if (!nome || !email || !password || !telefono) { alert("❌ Compila tutti i campi richiesti (Incluso Telefono)!"); return; }
+            if (ruolo === 'admin' && codiceAdmin !== CODICE_SICUREZZA_ADMIN) { alert("❌ Codice Sicurezza Admin Errato!"); return; }
+
+            // Generazione automatica credenziali API per la ditta (UUID simulato sicuro)
+            const dittaApiKey = 'tk_' + Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+            const codiceAdminCasuale = Math.floor(100000 + Math.random() * 900000); // Codice numerico a 6 cifre inviato via mail
+
+            const { data, error } = await supabaseClient.auth.signUp({
+                email: email, password: password, phone: telefono,
+                options: { 
+                    data: { 
+                        display_name: nome, 
+                        role: ruolo, 
+                        azienda: aziendaCodice, 
+                        azienda_nome_vero: aziendaRaw,
+                        ditta_api_key: dittaApiKey,
+                        codice_admin_generato: codiceAdminCasuale
+                    } 
+                }
+            });
+
+            if (error) {
+                alert("❌ Errore durante la registrazione: " + error.message);
+            } else {
+                // Punto 1 completato: L'utente viene reindirizzato all'attesa della mail
+                mostraFormRegistrazione('ATTESA_EMAIL');
+            }
+        }
+
+        async function verificaCodiceSMS() {
+            const codiceOtp = document.getElementById('input-otp-sms').value.trim();
+            const session = await supabaseClient.auth.getSession();
+            const phone = session.data?.session?.user?.phone;
+
+            if(!codiceOtp || !phone) return alert("Codice o numero non valido.");
+
+            const { data, error } = await supabaseClient.auth.verifyOtp({
+                phone: phone,
+                token: codiceOtp,
+                type: 'phone_change'
+            });
+
+            if(error) {
+                alert("❌ Codice SMS errato o scaduto: " + error.message);
+            } else {
+                alert("✅ Telefono Verificato con Successo!");
+                location.reload();
+            }
+        }
+
+        async function eseguiLogin() {
+            if (!supabaseClient) return alert("Attiva prima la sincronizzazione cloud!");
+            const emailIn = document.getElementById('login-email').value.trim().toLowerCase();
+            const passIn = document.getElementById('login-password').value;
+            const erroreDiv = document.getElementById('errore-login');
+            erroreDiv.classList.add('hidden');
+
+            const { data, error } = await supabaseClient.auth.signInWithPassword({ email: emailIn, password: passIn });
+            if (error) { erroreDiv.innerText = "❌ Credenziali errate o email non ancora confermata!"; erroreDiv.classList.remove('hidden'); }
+        }
+
+        async function eseguiLogout() {
+            if (supabaseClient) { await supabaseClient.auth.signOut(); }
+            sessionStorage.clear();
+            location.reload();
+        }
+
+        function forzaResetTotale() {
+            if (confirm("Vuoi azzerare il magazzino locale?")) { 
+                localStorage.removeItem('magazzino_elettrico_v4'); location.reload(); 
+            }
+        }
+
+        function aggiungiArticoloCustom() {
+            const nome = document.getElementById('nuovo-articolo-nome').value.trim();
+            const cat = document.getElementById('nuovo-articolo-cat').value;
+            if (!nome) return;
+            if (inventario.aggiungiVoceCustom(cat, nome)) {
+                scriviLog(`📦 [ADMIN] Aggiunto nuovo articolo: "${nome}" in [${cat}]`);
+                document.getElementById('nuovo-articolo-nome').value = '';
+                renderizzaInterfaccia(); gestisciCambioCategoria();
+            }
+        }
+
+        // ==========================================
+        // ESPORTAZIONE EXCEL DATI AZIENDALI
+        // ==========================================
+        function esportaInExcel() {
+            const magazzino = inventario.magazzino;
+            const nomeAzienda = sessionStorage.getItem('utente_azienda') || 'Inventario';
+            
+            let csv = "Categoria;Articolo;Specifiche/Colore;Quantita (Pezzi/Matasse);Metri Totali\n";
+            
+            for (const [dim, colori] of Object.entries(magazzino.cavi_unipolari)) {
+                for (const [col, q] of Object.entries(colori)) { csv += `Cavi Unipolari;${dim};${col.replace('_','/')};${q};-\n`; }
+            }
+            for (const [mod, d] of Object.entries(magazzino.bobine)) { csv += `Bobine;${mod};-;${d.pezzi};${d.metri_totali}\n`; }
+            for (const [t, d] of Object.entries(magazzino.fibra_ottica)) { csv += `Fibra Ottica;${t.toUpperCase()};-;${d.pezzi};${d.metri_totali}\n`; }
+            
+            const sezioni = ['componenti_impianti', 'strumenti_utensili', 'sicurezza_logistica', 'fo_borsa_tecnico', 'fo_consumabili_minuteria', 'fo_attrezzature_pesanti', 'altro_personalizzato'];
+            sezioni.forEach(s => {
+                const titoloCategoria = s.replace(/_/g, ' ').toUpperCase();
+                for (const [art, q] of Object.entries(magazzino[s] || {})) { csv += `${titoloCategoria};${art};-;${q};-\n`; }
+            });
+
+            const blob = new Blob([new Uint8Array([0xEF, 0xBB, 0xBF]), csv], { type: "text/csv;charset=utf-8;" });
+            const link = document.createElement("a");
+            const url = URL.createObjectURL(blob);
+            
+            link.setAttribute("href", url);
+            link.setAttribute("download", `Magazzino_${nomeAzienda}.csv`);
+            link.style.visibility = 'hidden';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            
+            scriviLog(`📊 [ADMIN] Esportato l'inventario Excel per l'azienda.`);
+        }
+
+        // ==========================================
+        // RENDER GRAFICA E GESTIONE
+        // ==========================================
+        function renderizzaInterfaccia() {
+            const cCavi = document.getElementById('container-cavi'); if(cCavi) cCavi.innerHTML = '';
+            for (const [dim, colori] of Object.entries(inventario.magazzino.cavi_unipolari)) {
+                let h = `<div class="font-medium text-xs text-gray-700">${dim}</div><div class="grid grid-cols-2 gap-1.5 text-xs mb-2">`;
+                for (const [col, q] of Object.entries(colori)) {
+                    h += `<div class="${q <= 10 ? 'bg-red-50 border-red-300':'bg-gray-50'} p-1 rounded border flex justify-between">
+                        <span class="capitalize text-gray-500 font-medium">${col.replace('_','/')}</span>
+                        <span class="${q <= 10 ? 'text-red-600 font-bold':'text-gray-800'}">${q} ${q <= 10 ? '⚠️' : ''}</span>
+                    </div>`;
+                }
+                cCavi.innerHTML += h + `</div>`;
+            }
+
+            const cBobine = document.getElementById('container-bobine'); if(cBobine) cBobine.innerHTML = '';
+            for (const [mod, d] of Object.entries(inventario.magazzino.bobine)) {
+                cBobine.innerHTML += `<div class="${d.pezzi <= 10 ? 'bg-red-50':'bg-gray-50'} p-1.5 rounded border text-xs flex justify-between items-center">
+                    <span class="font-semibold text-gray-700">${mod}</span>
+                    <span class="text-gray-600">${d.metri_totali}m / <b>${d.pezzi} Pz</b></span></div>`;
+            }
+
+            const cFibra = document.getElementById('container-fibra'); if(cFibra) cFibra.innerHTML = '';
+            for (const [t, d] of Object.entries(inventario.magazzino.fibra_ottica)) {
+                cFibra.innerHTML += `<div class="${d.pezzi <= 10 ? 'bg-red-50':'bg-gray-50'} p-1.5 rounded border text-xs flex justify-between items-center">
+                    <span class="font-semibold text-gray-700 capitalize">${t}</span>
+                    <span class="text-gray-600">${d.metri_totali}m / <b>${d.pezzi} Pz</b></span></div>`;
+            }
+
+            function renderOggettoSemplice(containerId, objetoDati) {
+                const el = document.getElementById(containerId); if (!el) return; el.innerHTML = '';
+                const chiavi = Object.keys(objetoDati);
+                if (chiavi.length === 0 && containerId === 'container-personalizzato') {
+                    el.innerHTML = `<p class="text-gray-400 text-xs italic">Nessun articolo personalizzato.</p>`; return;
+                }
+                chiavi.forEach(k => {
+                    const q = objetoDati[k];
+                    el.innerHTML += `<div class="${q <= 10 ? 'bg-red-50 border-red-300':'bg-gray-50'} p-1.5 rounded border text-xs flex justify-between items-center">
+                        <span class="text-gray-700 font-medium">${k}</span><span class="font-bold bg-white px-2 rounded shadow-sm border">${q}</span></div>`;
+                });
+            }
+            renderOggettoSemplice('container-componenti', inventario.magazzino.componenti_impianti);
+            renderOggettoSemplice('container-strumenti', inventario.magazzino.strumenti_utensili);
+            renderOggettoSemplice('container-sicurezza', inventario.magazzino.sicurezza_logistica);
+            renderOggettoSemplice('container-fo-borsa', inventario.magazzino.fo_borsa_tecnico);
+            renderOggettoSemplice('container-fo-consumabili', inventario.magazzino.fo_consumabili_minuteria);
+            renderOggettoSemplice('container-fo-pesanti', inventario.magazzino.fo_attrezzature_pesanti);
+            renderOggettoSemplice('container-personalizzato', inventario.magazzino.altro_personalizzato);
+        }
+
+        function gestisciCambioCategoria() {
+            const cat = document.getElementById('select-categoria').value;
+            const sArticolo = document.getElementById('select-articolo');
+            sArticolo.innerHTML = '';
+            document.getElementById('colore-wrapper').style.display = (cat === 'cavi') ? 'block' : 'none';
+            document.getElementById('pezzi-bobina-wrapper').classList.toggle('hidden', (cat !== 'bobine' && cat !== 'fibra'));
+            
+            if (cat === 'cavi') Object.keys(inventario.magazzino.cavi_unipolari).forEach(v => sArticolo.innerHTML += `<option value="${v}">${v}</option>`);
+            else if (cat === 'bobine') Object.keys(inventario.magazzino.bobine).forEach(v => sArticolo.innerHTML += `<option value="${v}">${v}</option>`);
+            else if (cat === 'fibra') Object.keys(inventario.magazzino.fibra_ottica).forEach(v => sArticolo.innerHTML += `<option value="${v}">${v.toUpperCase()}</option>`);
+            else Object.keys(inventario.magazzino[cat] || {}).forEach(v => sArticolo.innerHTML += `<option value="${v}">${v}</option>`);
+        }
+
+        function eseguiMovimento(isCarico) {
+            const utenteAct = sessionStorage.getItem('utente_sessione');
+            const cat = document.getElementById('select-categoria').value;
+            const articolo = document.getElementById('select-articolo').value;
+            
+            let qta = Math.abs(parseInt(document.getElementById('input-quantita').value) || 0);
+            let pzBobina = Math.abs(parseInt(document.getElementById('input-pezzi-bobina').value) || 0);
+
+            if (qta === 0 && pzBobina === 0) return;
+            const segno = isCarico ? 1 : -1;
+            qta *= segno; pzBobina *= segno;
+
+            let successo = false;
+            if (cat === 'cavi') successo = inventario.aggiornaCavoUnipolare(articolo, document.getElementById('select-colore').value, qta, utenteAct);
+            else if (cat === 'bobine' || cat === 'fibra') successo = inventario.aggiornaBobinaStruttura(cat === 'fibra' ? 'fibra_ottica' : 'bobine', articolo.toLowerCase(), qta, pzBobina, utenteAct);
+            else successo = inventario.aggiornaArticoloGenerico(cat, articolo, qta, utenteAct);
+
+            if (successo) {
+                renderizzaInterfaccia();
+                document.getElementById('input-quantita').value = '';
+                document.getElementById('input-pezzi-bobina').value = '';
+            }
+        }
+
+        window.onload = async () => {
+            // Se hai inserito i dati fissi sopra, si collega da solo all'avvio
+            if(SUPABASE_URL_FISSO && !SUPABASE_URL_FISSO.includes("xyzabc")) {
+                await inizializzaSupabase(SUPABASE_URL_FISSO, SUPABASE_KEY_FISSA);
+            } else {
+                // Altrimenti prova a leggere dal vecchio box ambrato se memorizzato
+                const savedUrl = localStorage.getItem('supabase_url'); 
+                const savedKey = localStorage.getItem('supabase_key');
+                if(savedUrl && savedKey) await inizializzaSupabase(savedUrl, savedKey);
+            }
+            controllaSessione();
+        };
+    </script>
+</body>
+</html>
