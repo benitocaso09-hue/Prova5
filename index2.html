@@ -696,11 +696,33 @@
             location.reload();
         }
 
-        function forzaResetTotale() {
-            if (confirm("Vuoi azzerare il magazzino locale?")) { 
-                localStorage.removeItem('magazzino_elettrico_v4'); location.reload(); 
+        async function forzaResetTotale() {
+        if (confirm("⚠️ ATTENZIONE: Vuoi effettuare un reset FORZATO del database? Questa azione cancellerà in modo PERMANENTE tutti i record dal server cloud per la tua ditta. Non è un semplice reset visivo, i dati non potranno essere recuperati. Procedere?")) { 
+            
+            // 1. Azzera la memoria locale
+            inventario.magazzino = DATI_INIZIALI;
+            localStorage.setItem('magazzino_elettrico_v4', JSON.stringify(DATI_INIZIALI));
+            
+            // 2. FORZATURA SUL DATABASE: Sovrascrive i record in modo permanente in Cloud
+            if(supabaseClient) {
+                const azienda = sessionStorage.getItem('utente_azienda');
+                if(azienda) {
+                    // Manda al server il magazzino completamente svuotato e azzerato
+                    await inviaACloud('inventario', DATI_INIZIALI);
+                    
+                    // Svuota in modo forzato anche il registro attività del terminale
+                    await inviaACloud('registro_logs', [{
+                        time: new Date().toLocaleTimeString('it-IT'), 
+                        msg: "⚠️ RESET FORZATO DEL DATABASE ESEGUITO DALL'AMMINISTRATORE", 
+                        errore: true
+                    }]);
+                }
             }
+
+            alert("✅ Svuotamento e reset forzato del database completati con successo.");
+            location.reload(); 
         }
+    }
 
         function aggiungiArticoloCustom() {
             const nome = document.getElementById('nuovo-articolo-nome').value.trim();
