@@ -697,27 +697,41 @@
         }
 
         async function forzaResetTotale() {
-        if (confirm("⚠️ ATTENZIONE: Vuoi effettuare un reset FORZATO del database? Questa azione cancellerà in modo PERMANENTE tutti i record dal server cloud per la tua ditta. Non è un semplice reset visivo, i dati non potranno essere recuperati. Procedere?")) { 
+        if (confirm("⚠️ ATTENZIONE: Vuoi effettuare un reset FORZATO del database? Questa azione sovrascriverà in modo PERMANENTE tutti i record sul cloud per la tua ditta. Procedere?")) { 
             
-            // 1. Azzera la memoria locale
+            // 1. Ripristina i dati iniziali vuoti nella memoria del telefono
             inventario.magazzino = DATI_INIZIALI;
             localStorage.setItem('magazzino_elettrico_v4', JSON.stringify(DATI_INIZIALI));
             
-            // 2. FORZATURA SUL DATABASE: Sovrascrive i record in modo permanente in Cloud
             if(supabaseClient) {
                 const azienda = sessionStorage.getItem('utente_azienda');
                 if(azienda) {
-                    // Manda al server il magazzino completamente svuotato e azzerato
-                    await inviaACloud('inventario', DATI_INIZIALI);
-                    
-                    // Svuota in modo forzato anche il registro attività del terminale
-                    await inviaACloud('registro_logs', [{
-                        time: new Date().toLocaleTimeString('it-IT'), 
-                        msg: "⚠️ RESET FORZATO DEL DATABASE ESEGUITO DALL'AMMINISTRATORE", 
-                        errore: true
-                    }]);
+                    const chiaveAziendale = 'inventario_' + azienda;
+                    const chiaveLogs = 'registro_logs_' + azienda;
+
+                    try {
+                        // 2. MODIFICA DIRETTA: Forziamo l'aggiornamento della riga esistente nel cloud
+                        await supabaseClient
+                            .from('magazzino_condiviso')
+                            .update({ valore: DATI_INIZIALI })
+                            .eq('chiave', chiaveAziendale);
+                        
+                        // 3. Forziamo l'azzeramento anche dei log
+                        await supabaseClient
+                            .from('magazzino_condiviso')
+                            .update({ valore: [{ time: new Date().toLocaleTimeString('it-IT'), msg: "⚠️ RESET GENERALE ESEGUITO", errore: true }] })
+                            .eq('chiave', chiaveLogs);
+
+                    } catch (erroreCloud) {
+                        console.error("Errore durante il reset sul Cloud:", erroreCloud);
+                    }
                 }
             }
+
+            alert("✅ Reset forzato completato con successo su tutti i sistemi.");
+            location.reload(); 
+        }
+    }
 
             alert("✅ Svuotamento e reset forzato del database completati con successo.");
             location.reload(); 
