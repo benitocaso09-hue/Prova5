@@ -541,197 +541,157 @@
         }
 
         // ==========================================
-        // LOGICA DI CONTROLLO SESSIONE ED SMS
-        // ==========================================
-        function controllaSessione() {
-            if (!supabaseClient) {
-                setTimeout(controllaSessione, 500);
+// LOGICA DI CONTROLLO SESSIONE ED SMS
+// ==========================================
+function controllaSessione() {
+    if (!supabaseClient) {
+        setTimeout(controllaSessione, 500);
+        return;
+    }
+
+    supabaseClient.auth.onAuthStateChange(async (event, session) => {
+        if (session && session.user) {
+            const utente = session.user;
+
+            // Se l'utente è loggato ma ha un telefono nei metadati che non è ancora stato verificato sul database nativo
+            if (utente.user_metadata.telefono_da_verificare && !utente.phone_confirmed_at) {
+                if (event === 'SIGNED_IN' && !sessionStorage.getItem('sms_inviato')) {
+                    // Invia l'SMS OTP usando il sistema nativo di Supabase
+                    await supabaseClient.auth.updateUser({ phone: utente.user_metadata.telefono_da_verificare });
+                    sessionStorage.setItem('sms_inviato', 'true');
+                }
+                mostraFormRegistrazione('VERIFICA_SMS');
                 return;
             }
 
-            supabaseClient.auth.onAuthStateChange(async (event, session) => {
-                if (session && session.user) {
-                    const utente = session.user;
+            const nome = utente.user_metadata.display_name || utente.email;
+            const ruolo = utente.user_metadata.role || 'collega';
+            const azienda = utente.user_metadata.azienda || 'generico';
+            const aziendaVera = utente.user_metadata.azienda_nome_vero || azienda;
 
-                    // CONTROLLO 1: L'utente ha confermato il telefono via SMS?
-                    // (Se l'SMS provider su Supabase è configurato, controlliamo l'attributo nativo phone_confirmed_at)
-                    if (utente.phone && !utente.phone_confirmed_at) {
-                        // Se non è confermato il telefono, attiviamo la sfida SMS e blocchiamo l'entrata alla dashboard
-                        if (event === 'SIGNED_IN') {
-                            await supabaseClient.auth.updateUser({ phone: utente.phone }); // Invia SMS OTP nativo
-                        }
-                        mostraFormRegistrazione('VERIFICA_SMS');
-                        return;
-                    }
+            sessionStorage.setItem('utente_sessione', nome);
+            sessionStorage.setItem('utente_ruolo', ruolo);
+            sessionStorage.setItem('utente_azienda', azienda);
 
-                    const nome = utente.user_metadata.display_name || utente.email;
-                    const ruolo = utente.user_metadata.role || 'collega';
-                    const azienda = utente.user_metadata.azienda || 'generico';
-                    const aziendaVera = utente.user_metadata.azienda_nome_vero || azienda;
-
-                    sessionStorage.setItem('utente_sessione', nome);
-                    sessionStorage.setItem('utente_ruolo', ruolo);
-                    sessionStorage.setItem('utente_azienda', azienda);
-
-                    document.getElementById('sezione-login').classList.add('hidden');
-                    document.getElementById('app-magazzino').classList.remove('hidden');
-                    document.getElementById('nome-utente').innerText = nome;
-                    
-                    const labelAz = document.getElementById('nome-azienda');
-                    if(labelAz) labelAz.innerText = "🏢 " + aziendaVera;
-
-                    document.getElementById('ruolo-utente').innerText = ruolo === 'admin' ? '👑 Admin' : '👷 Collega';
-
-                    const visibilitaAdmin = ruolo === 'admin';
-                    ['btn-carica-materiale', 'sezione-admin-custom', 'btn-reset-admin', 'btn-esporta-excel', 'box-credenziali-api'].forEach(id => {
-                        const el = document.getElementById(id);
-                        if(el) visibilitaAdmin ? el.classList.remove('hidden') : el.classList.add('hidden');
-                    });
-
-                    // Mostra i parametri API generati all'Admin
-                    if(visibilitaAdmin) {
-                        document.getElementById('api-url-display').innerText = localStorage.getItem('supabase_url');
-                        document.getElementById('api-key-display').innerText = utente.user_metadata.ditta_api_key || "Generata su DB";
-                        document.getElementById('api-code-display').innerText = utente.user_metadata.codice_admin_generato || "1234";
-                    }
-
-                    const elTerminale = document.getElementById('sezione-terminale-admin');
-                    if (elTerminale) {
-                        elTerminale.classList.remove('hidden');
-                        const titolo = elTerminale.querySelector('p');
-                        if (titolo) titolo.innerText = "// Registro attività aziendale in tempo reale";
-                    }
-
-                    renderizzaInterfaccia();
-                    gestisciCambioCategoria();
-                } else {
-                    sessionStorage.clear();
-                    document.getElementById('sezione-login').classList.remove('hidden');
-                    document.getElementById('app-magazzino').classList.add('hidden');
-                }
-            });
-        }
-
-        async function eseguiRegistrazione() {
-            if (!supabaseClient) return alert("Attiva prima la sincronizzazione cloud!");
-
-            const nome = document.getElementById('reg-nome').value.trim();
-            const email = document.getElementById('reg-email').value.trim().toLowerCase();
-            const telefono = document.getElementById('reg-telefono').value.trim();
-            const password = document.getElementById('reg-password').value;
-            const ruolo = document.getElementById('reg-ruolo').value;
-            const codiceAdmin = document.getElementById('reg-codice-admin').value;
+            document.getElementById('sezione-login').classList.add('hidden');
+            document.getElementById('app-magazzino').classList.remove('hidden');
+            document.getElementById('nome-utente').innerText = nome;
             
-            const regAziendaEl = document.getElementById('reg-azienda');
-            if(!regAziendaEl) return alert("❌ Errore HTML: Manca il campo Nome Azienda!");
-            let aziendaRaw = regAziendaEl.value.trim();
-            if (!aziendaRaw) return alert("❌ Inserisci il nome dell'azienda!");
-            
-            const aziendaCodice = aziendaRaw.toLowerCase().replace(/[^a-z0-9]/g, '');
+            const labelAz = document.getElementById('nome-azienda');
+            if(labelAz) labelAz.innerText = "🏢 " + aziendaVera;
 
-            if (!nome || !email || !password || !telefono) { alert("❌ Compila tutti i campi richiesti (Incluso Telefono)!"); return; }
-            if (ruolo === 'admin' && codiceAdmin !== CODICE_SICUREZZA_ADMIN) { alert("❌ Codice Sicurezza Admin Errato!"); return; }
+            document.getElementById('ruolo-utente').innerText = ruolo === 'admin' ? '👑 Admin' : '👷 Collega';
 
-            // Generazione automatica credenziali API per la ditta (UUID simulato sicuro)
-            const dittaApiKey = 'tk_' + Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
-            const codiceAdminCasuale = Math.floor(100000 + Math.random() * 900000); // Codice numerico a 6 cifre inviato via mail
-
-            const { data, error } = await supabaseClient.auth.signUp({
-                email: email, password: password, phone: telefono,
-                options: { 
-                    data: { 
-                        display_name: nome, 
-                        role: ruolo, 
-                        azienda: aziendaCodice, 
-                        azienda_nome_vero: aziendaRaw,
-                        ditta_api_key: dittaApiKey,
-                        codice_admin_generato: codiceAdminCasuale
-                    } 
-                }
+            const visibilitaAdmin = ruolo === 'admin';
+            ['btn-carica-materiale', 'sezione-admin-custom', 'btn-reset-admin', 'btn-esporta-excel', 'box-credenziali-api'].forEach(id => {
+                const el = document.getElementById(id);
+                if(el) visibilitaAdmin ? el.classList.remove('hidden') : el.classList.add('hidden');
             });
 
-            if (error) {
-                alert("❌ Errore durante la registrazione: " + error.message);
-            } else {
-                // Punto 1 completato: L'utente viene reindirizzato all'attesa della mail
-                mostraFormRegistrazione('ATTESA_EMAIL');
+            if(visibilitaAdmin) {
+                document.getElementById('api-url-display').innerText = localStorage.getItem('supabase_url');
+                document.getElementById('api-key-display').innerText = utente.user_metadata.ditta_api_key || "Generata su DB";
+                document.getElementById('api-code-display').innerText = utente.user_metadata.codice_admin_generato || "1234";
             }
-        }
 
-        async function verificaCodiceSMS() {
-            const codiceOtp = document.getElementById('input-otp-sms').value.trim();
-            const session = await supabaseClient.auth.getSession();
-            const phone = session.data?.session?.user?.phone;
+            const elTerminale = document.getElementById('sezione-terminale-admin');
+            if (elTerminale) elTerminale.classList.remove('hidden');
 
-            if(!codiceOtp || !phone) return alert("Codice o numero non valido.");
-
-            const { data, error } = await supabaseClient.auth.verifyOtp({
-                phone: phone,
-                token: codiceOtp,
-                type: 'phone_change'
-            });
-
-            if(error) {
-                alert("❌ Codice SMS errato o scaduto: " + error.message);
-            } else {
-                alert("✅ Telefono Verificato con Successo!");
-                location.reload();
-            }
-        }
-
-        async function eseguiLogin() {
-            if (!supabaseClient) return alert("Attiva prima la sincronizzazione cloud!");
-            const emailIn = document.getElementById('login-email').value.trim().toLowerCase();
-            const passIn = document.getElementById('login-password').value;
-            const erroreDiv = document.getElementById('errore-login');
-            erroreDiv.classList.add('hidden');
-
-            const { data, error } = await supabaseClient.auth.signInWithPassword({ email: emailIn, password: passIn });
-            if (error) { erroreDiv.innerText = "❌ Credenziali errate o email non ancora confermata!"; erroreDiv.classList.remove('hidden'); }
-        }
-
-        async function eseguiLogout() {
-            if (supabaseClient) { await supabaseClient.auth.signOut(); }
+            renderizzaInterfaccia();
+            gestisciCambioCategoria();
+        } else {
             sessionStorage.clear();
-            location.reload();
+            document.getElementById('sezione-login').classList.remove('hidden');
+            document.getElementById('app-magazzino').classList.add('hidden');
         }
+    });
+}
 
-        async function forzaResetTotale() {
-        if (confirm("⚠️ ATTENZIONE: Vuoi effettuare un reset FORZATO del database? Questa azione sovrascriverà in modo PERMANENTE tutti i record sul cloud per la tua ditta. Procedere?")) { 
-            
-            // 1. Ripristina i dati iniziali vuoti nella memoria del telefono
-            inventario.magazzino = DATI_INIZIALI;
-            localStorage.setItem('magazzino_elettrico_v4', JSON.stringify(DATI_INIZIALI));
-            
-            if(supabaseClient) {
-                const azienda = sessionStorage.getItem('utente_azienda');
-                if(azienda) {
-                    const chiaveAziendale = 'inventario_' + azienda;
-                    const chiaveLogs = 'registro_logs_' + azienda;
+async function eseguiRegistrazione() {
+    if (!supabaseClient) return alert("Attiva prima la sincronizzazione cloud!");
 
-                    try {
-                        // 2. MODIFICA DIRETTA: Forziamo l'aggiornamento della riga esistente nel cloud
-                        await supabaseClient
-                            .from('magazzino_condiviso')
-                            .update({ valore: DATI_INIZIALI })
-                            .eq('chiave', chiaveAziendale);
-                        
-                        // 3. Forziamo l'azzeramento anche dei log
-                        await supabaseClient
-                            .from('magazzino_condiviso')
-                            .update({ valore: [{ time: new Date().toLocaleTimeString('it-IT'), msg: "⚠️ RESET GENERALE ESEGUITO", errore: true }] })
-                            .eq('chiave', chiaveLogs);
+    const nome = document.getElementById('reg-nome').value.trim();
+    const email = document.getElementById('reg-email').value.trim().toLowerCase();
+    const telefono = document.getElementById('reg-telefono').value.trim();
+    const password = document.getElementById('reg-password').value;
+    const ruolo = document.getElementById('reg-ruolo').value;
+    const codiceAdmin = document.getElementById('reg-codice-admin').value;
+    
+    const regAziendaEl = document.getElementById('reg-azienda');
+    if(!regAziendaEl) return alert("❌ Errore HTML: Manca il campo Nome Azienda!");
+    let aziendaRaw = regAziendaEl.value.trim();
+    if (!aziendaRaw) return alert("❌ Inserisci il nome dell'azienda!");
+    
+    const aziendaCodice = aziendaRaw.toLowerCase().replace(/[^a-z0-9]/g, '');
 
-                    } catch (erroreCloud) {
-                        console.error("Errore durante il reset sul Cloud:", erroreCloud);
-                    }
+    if (!nome || !email || !password || !telefono) { alert("❌ Compila tutti i campi richiesti (Incluso Telefono)!"); return; }
+    if (ruolo === 'admin' && codiceAdmin !== CODICE_SICUREZZA_ADMIN) { alert("❌ Codice Sicurezza Admin Errato!"); return; }
+
+    const dittaApiKey = 'tk_' + Math.random().toString(36).substring(2, 15);
+    const codiceAdminCasuale = Math.floor(100000 + Math.random() * 900000);
+
+    // Registrazione primaria tramite EMAIL
+    const { data, error } = await supabaseClient.auth.signUp({
+        email: email, 
+        password: password,
+        options: { 
+            data: { 
+                display_name: nome, 
+                role: ruolo, 
+                azienda: aziendaCodice, 
+                azienda_nome_vero: aziendaRaw,
+                telefono_da_verificare: telefono, // Lo salviamo qui, lo verificheremo al primo login
+                ditta_api_key: dittaApiKey,
+                codice_admin_generato: codiceAdminCasuale
+            } 
+        }
+    });
+
+    if (error) {
+        alert("❌ Errore durante la registrazione: " + error.message);
+    } else {
+        mostraFormRegistrazione('ATTESA_EMAIL');
+    }
+}
+
+async function verificaCodiceSMS() {
+    const codiceOtp = document.getElementById('input-otp-sms').value.trim();
+    if(!codiceOtp) return alert("Inserisci il codice ricevuto via SMS.");
+
+    const { data, error } = await supabaseClient.auth.verifyOtp({
+        type: 'phone_change',
+        token: codiceOtp
+    });
+
+    if(error) {
+        alert("❌ Codice SMS errato o scaduto: " + error.message);
+    } else {
+        alert("✅ Telefono Verificato con Successo!");
+        sessionStorage.removeItem('sms_inviato');
+        location.reload();
+    }
+}
+
+async function forzaResetTotale() {
+    if (confirm("⚠️ ATTENZIONE: Vuoi effettuare un reset FORZATO del database? Questa azione sovrascriverà in modo PERMANENTE tutti i record sul cloud per la tua ditta. Procedere?")) { 
+        inventario.magazzino = DATI_INIZIALI;
+        localStorage.setItem('magazzino_elettrico_v4', JSON.stringify(DATI_INIZIALI));
+        
+        if(supabaseClient) {
+            const azienda = sessionStorage.getItem('utente_azienda');
+            if(azienda) {
+                try {
+                    await supabaseClient.from('magazzino_condiviso').update({ valore: DATI_INIZIALI }).eq('chiave', 'inventario_' + azienda);
+                    await supabaseClient.from('magazzino_condiviso').update({ valore: [{ time: new Date().toLocaleTimeString('it-IT'), msg: "⚠️ RESET GENERALE ESEGUITO", errore: true }] }).eq('chiave', 'registro_logs_' + azienda);
+                } catch (erroreCloud) {
+                    console.error("Errore durante il reset sul Cloud:", erroreCloud);
                 }
             }
-
-            alert("✅ Reset forzato completato con successo su tutti i sistemi.");
-            location.reload(); 
         }
+        alert("✅ Reset forzato completato con successo su tutti i sistemi.");
+        location.reload(); 
     }
+}
 
             alert("✅ Svuotamento e reset forzato del database completati con successo.");
             location.reload(); 
